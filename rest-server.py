@@ -5,6 +5,7 @@ import jsonpickle
 from PIL import Image
 import io
 import argparse
+import base64
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -51,12 +52,96 @@ def rawimage():
 
 @app.route('/api/dotproduct', methods=['POST'])
 def dotproduct():
-    pass
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'Expected a JSON object containing a and b'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    a = data.get('a')
+    b = data.get('b')
+
+    if not isinstance(a, list) or not isinstance(b, list):
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'a and b must be lists'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    if len(a) != len(b):
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'Vectors must have the same length'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    if not all(
+        isinstance(x, (int, float)) and not isinstance(x, bool)
+        for x in a + b
+    ):
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'Vector elements must be numbers'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    result = sum(x * y for x, y in zip(a, b))
+
+    return Response(
+        response=jsonpickle.encode({'dotproduct': result}),
+        status=200,
+        mimetype="application/json"
+    )
 
 
 @app.route('/api/jsonimage', methods=['POST'])
 def jsonimage():
-    pass
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict) or not isinstance(data.get('image'), str):
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'Expected a JSON object containing a base64 image'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    try:
+        image_bytes = base64.b64decode(data['image'], validate=True)
+        img = Image.open(io.BytesIO(image_bytes))
+        img.verify()
+
+        img = Image.open(io.BytesIO(image_bytes))
+        response = {
+            'width': img.size[0],
+            'height': img.size[1]
+        }
+    except Exception:
+        return Response(
+            response=jsonpickle.encode(
+                {'error': 'Invalid base64-encoded image'}
+            ),
+            status=400,
+            mimetype="application/json"
+        )
+
+    return Response(
+        response=jsonpickle.encode(response),
+        status=200,
+        mimetype="application/json"
+    )
 
 
 if __name__ == '__main__':
